@@ -33,29 +33,36 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-3.5-turbo')
   const [showModelSelect, setShowModelSelect] = useState(false)
+  const [session, setSession] = useState<any>(null)
+  const [testResult, setTestResult] = useState<any>(null)
 
   useEffect(() => {
     // Check for existing session
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      setSession(currentSession)
+      if (currentSession?.user) {
         setUser({
-          email: session.user.email,
-          avatar_url: session.user.user_metadata.avatar_url,
-          full_name: session.user.user_metadata.full_name
+          email: currentSession.user.email,
+          avatar_url: currentSession.user.user_metadata.avatar_url,
+          full_name: currentSession.user.user_metadata.full_name
         })
+        
+        // Load chat history when user logs in
+        loadChatHistory(currentSession.access_token)
       }
     }
     
     checkUser()
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession)
+      if (currentSession?.user) {
         setUser({
-          email: session.user.email,
-          avatar_url: session.user.user_metadata.avatar_url,
-          full_name: session.user.user_metadata.full_name
+          email: currentSession.user.email,
+          avatar_url: currentSession.user.user_metadata.avatar_url,
+          full_name: currentSession.user.user_metadata.full_name
         })
       } else {
         setUser(null)
@@ -66,6 +73,26 @@ export default function Home() {
       subscription.unsubscribe()
     }
   }, [])
+
+  const loadChatHistory = async (token: string) => {
+    try {
+      const response = await fetch('/api/chat/history', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to load chat history')
+      }
+
+      const data = await response.json()
+      setMessages(data.messages)
+    } catch (error) {
+      console.error('Error loading chat history:', error)
+      setError('Failed to load chat history')
+    }
+  }
 
   const handleLogin = async () => {
     try {
@@ -90,7 +117,7 @@ export default function Home() {
     try {
       await supabase.auth.signOut()
       setShowProfileMenu(false)
-      // No need for manual redirect as the auth state change will trigger UI update
+      setMessages([]) // Clear messages on logout
     } catch (error) {
       console.error('Error signing out:', error)
       setError('Failed to logout. Please try again.')
@@ -99,7 +126,7 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    if (!input.trim() || !session) return
 
     const userMessage: Message = { 
       role: 'user', 
@@ -116,6 +143,7 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ 
           message: input,
@@ -124,7 +152,7 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to get response')
+        throw new Error(await response.text())
       }
 
       const data = await response.json()
@@ -142,43 +170,76 @@ export default function Home() {
     }
   }
 
+  const handleTestMemory = async () => {
+    if (!session) return;
+    
+    try {
+      const response = await fetch('/api/chat/test', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to test memory');
+      }
+
+      const data = await response.json();
+      setTestResult(data);
+      console.log('Memory test result:', data);
+    } catch (error) {
+      console.error('Error testing memory:', error);
+      setError('Failed to test memory');
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#1B1B1B] text-white">
       {/* Header */}
       <header className="flex items-center justify-between p-4 border-b border-gray-700">
         <div className="flex items-center space-x-4">
           <h1 className="text-xl font-semibold">AI Chat</h1>
-          <div className="relative">
-            <button
-              onClick={() => setShowModelSelect(!showModelSelect)}
-              className="px-3 py-1 text-sm bg-gray-800 rounded-md hover:bg-gray-700 flex items-center space-x-2"
-            >
-              <span>{models.find(m => m.id === selectedModel)?.name}</span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+          {user && (
+            <>
+              <div className="relative">
+                <button
+                  onClick={() => setShowModelSelect(!showModelSelect)}
+                  className="px-3 py-1 text-sm bg-gray-800 rounded-md hover:bg-gray-700 flex items-center space-x-2"
+                >
+                  <span>{models.find(m => m.id === selectedModel)?.name}</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
 
-            {showModelSelect && (
-              <div className="absolute left-0 mt-2 w-64 bg-[#2D2D2D] rounded-md shadow-lg py-1 z-10">
-                {models.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => {
-                      setSelectedModel(model.id)
-                      setShowModelSelect(false)
-                    }}
-                    className={`w-full px-4 py-2 text-left hover:bg-gray-700 flex flex-col ${
-                      selectedModel === model.id ? 'bg-gray-700' : ''
-                    }`}
-                  >
-                    <span className="font-medium">{model.name}</span>
-                    <span className="text-sm text-gray-400">{model.description}</span>
-                  </button>
-                ))}
+                {showModelSelect && (
+                  <div className="absolute left-0 mt-2 w-64 bg-[#2D2D2D] rounded-md shadow-lg py-1 z-10">
+                    {models.map((model) => (
+                      <button
+                        key={model.id}
+                        onClick={() => {
+                          setSelectedModel(model.id)
+                          setShowModelSelect(false)
+                        }}
+                        className={`w-full px-4 py-2 text-left hover:bg-gray-700 flex flex-col ${
+                          selectedModel === model.id ? 'bg-gray-700' : ''
+                        }`}
+                      >
+                        <span className="font-medium">{model.name}</span>
+                        <span className="text-sm text-gray-400">{model.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+              <button
+                onClick={handleTestMemory}
+                className="px-3 py-1 text-sm bg-gray-800 rounded-md hover:bg-gray-700"
+              >
+                Test Memory
+              </button>
+            </>
+          )}
         </div>
         
         {user ? (
@@ -222,75 +283,102 @@ export default function Home() {
             onClick={handleLogin}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
           >
-            Login
+            Login with Google
           </button>
         )}
       </header>
 
-      {/* Chat Messages */}
+      {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] p-3 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-white'
-              }`}
+        {!user ? (
+          <div className="flex flex-col items-center justify-center h-full space-y-4">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-bold">Welcome to AI Chat</h2>
+              <p className="text-gray-400">Please login to start chatting with our AI models</p>
+            </div>
+            <button
+              onClick={handleLogin}
+              className="px-6 py-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <div className="flex flex-col">
-                {message.model && (
-                  <span className="text-xs text-gray-300 mb-1">
-                    {models.find(m => m.id === message.model)?.name}
-                  </span>
-                )}
-                {message.content}
+              Login with Google
+            </button>
+          </div>
+        ) : (
+          <>
+            {testResult && (
+              <div className="mb-4 p-4 bg-gray-800 rounded-lg overflow-auto max-h-60">
+                <h3 className="font-bold mb-2">Memory Test Results:</h3>
+                <pre className="text-sm text-gray-300 whitespace-pre-wrap">
+                  {JSON.stringify(testResult, null, 2)}
+                </pre>
               </div>
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="max-w-[80%] p-3 rounded-lg bg-gray-700">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+            )}
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] p-3 rounded-lg ${
+                    message.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-white'
+                  }`}
+                >
+                  <div className="flex flex-col">
+                    {message.model && (
+                      <span className="text-xs text-gray-300 mb-1">
+                        {models.find(m => m.id === message.model)?.name}
+                      </span>
+                    )}
+                    {message.content}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="flex justify-center">
-            <div className="p-3 text-red-400 bg-red-900/20 rounded-lg">
-              {error}
-            </div>
-          </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] p-3 rounded-lg bg-gray-700">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {error && (
+              <div className="flex justify-center">
+                <div className="p-3 text-red-400 bg-red-900/20 rounded-lg">
+                  {error}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Message Input */}
-      <div className="p-4 border-t border-gray-700">
-        <form onSubmit={handleSubmit} className="flex space-x-4">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask ${models.find(m => m.id === selectedModel)?.name}...`}
-            className="flex-1 p-2 bg-[#2D2D2D] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Send
-          </button>
-        </form>
-      </div>
+      {user && (
+        <div className="p-4 border-t border-gray-700">
+          <form onSubmit={handleSubmit} className="flex space-x-4">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={`Ask ${models.find(m => m.id === selectedModel)?.name}...`}
+              className="flex-1 p-2 bg-[#2D2D2D] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || isLoading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   )
 } 

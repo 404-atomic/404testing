@@ -1,8 +1,8 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai'
-import { BufferMemory } from 'langchain/memory'
 import { ConversationChain } from 'langchain/chains'
+import { getMemoryManager } from './memoryStore'
 
 // Check for required environment variables
 if (!process.env.OPENAI_API_KEY) {
@@ -15,7 +15,7 @@ if (!process.env.GOOGLE_API_KEY) {
   throw new Error('Missing GOOGLE_API_KEY environment variable')
 }
 
-export type ModelType = 'gpt-3.5-turbo' | 'gpt-4' | 'claude-3-opus-latest' | 'claude-3-7-sonnet-latest' 
+export type ModelType = 'gpt-3.5-turbo' | 'gpt-4' | 'claude-3-opus-latest' | 'claude-3-7-sonnet-latest'
 
 const createModel = (modelType: ModelType) => {
   switch (modelType) {
@@ -38,12 +38,12 @@ const createModel = (modelType: ModelType) => {
   }
 }
 
-export const createChain = (modelType: ModelType) => {
+export const createChain = (modelType: ModelType, sessionId: string) => {
   const model = createModel(modelType)
-  const memory = new BufferMemory()
+  const memoryManager = getMemoryManager(sessionId)
 
   return new ConversationChain({
     llm: model,
-    memory: memory,
+    memory: memoryManager.getMemory(),
   })
 } 
