@@ -1,6 +1,6 @@
 # AI Chat Application
 
-A Next.js application featuring a chat interface powered by multiple AI models, with Supabase authentication and persistent chat history.
+A Next.js application featuring a chat interface powered by multiple AI models, with Supabase authentication.
 
 ## Setup
 
@@ -16,42 +16,11 @@ npm install
      - Get Supabase credentials from your project settings:
        - `NEXT_PUBLIC_SUPABASE_URL`
        - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-       - `SUPABASE_SERVICE_ROLE_KEY` (from Project Settings > API > service_role key)
      - OpenAI API key from [OpenAI Platform](https://platform.openai.com)
      - Anthropic API key from [Anthropic Console](https://console.anthropic.com)
      - Google API key from [Google AI Studio](https://makersuite.google.com)
 
-4. Set up Supabase database:
-   - Go to your Supabase project SQL editor
-   - Run the following SQL to create the chat history table:
-```sql
--- Create chat history table
-CREATE TABLE IF NOT EXISTS chat_history (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-    content TEXT NOT NULL,
-    model TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Enable RLS (Row Level Security)
-ALTER TABLE chat_history ENABLE ROW LEVEL SECURITY;
-
--- Create policy for users to read their own messages
-CREATE POLICY "Users can read their own messages"
-    ON chat_history
-    FOR SELECT
-    USING (auth.uid() = user_id);
-
--- Create policy for users to insert their own messages
-CREATE POLICY "Users can insert their own messages"
-    ON chat_history
-    FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
-```
-
-5. Start the development server:
+4. Start the development server:
 ```bash
 npm run dev
 ```
@@ -62,9 +31,51 @@ npm run dev
 - Google authentication via Supabase
 - Real-time chat interface
 - Model selection for each message
-- Persistent conversation history in Supabase
-- Memory management for context-aware responses
 - Responsive design
+
+## Architecture Overview
+
+This project is a web application that allows users to:
+- Log in with Google authentication via Supabase
+- Chat with multiple AI models (OpenAI's GPT-3.5/GPT-4 and Anthropic's Claude models)
+
+### Technology Stack
+
+- **Frontend**: Next.js 14 (React 18) with TypeScript
+- **Authentication**: Supabase Auth with Google OAuth
+- **Styling**: Tailwind CSS
+- **AI Integration**: LangChain with OpenAI and Anthropic APIs
+
+### Key Components
+
+#### Authentication
+- Uses Supabase's authentication system with Google OAuth
+- Handles login/logout and session persistence
+- Implements callback handling for OAuth redirects
+
+#### Chat Interface
+- Real-time chat UI with different styling for user and AI messages
+- Model selection dropdown (GPT-3.5, GPT-4, Claude 3 Opus, Claude 3 Sonnet)
+- Message loading indicators
+- Error handling
+
+#### Backend API Routes
+- `/api/chat/route.ts`: Main endpoint for processing chat messages
+  - Authenticates the user
+  - Processes the message with the selected AI model
+  - Returns AI responses
+
+#### AI Integration
+- Uses LangChain to create unified interfaces for different AI models
+- Supports multiple models:
+  - OpenAI: GPT-3.5 and GPT-4
+  - Anthropic: Claude 3 Opus and Claude 3 Sonnet
+
+### Key Files
+- `src/app/page.tsx`: Main chat interface
+- `src/app/auth/login/page.tsx`: Login page
+- `src/lib/langchain.ts`: AI model initialization
+- `src/lib/supabase.ts`: Supabase client initialization
 
 ## Environment Variables
 
@@ -74,7 +85,6 @@ Required environment variables:
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 # AI Model API Keys
 OPENAI_API_KEY=your_openai_api_key
@@ -82,9 +92,11 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_API_KEY=your_google_api_key
 ```
 
-## Security Note
+## Security Considerations
 
-Never commit your `.env.local` file or any API keys to version control. The `.env.example` file provides a template for required environment variables. The `SUPABASE_SERVICE_ROLE_KEY` has admin privileges, so keep it secure and only use it in server-side API routes.
+- API keys are stored as environment variables
+- Authorization headers for API requests
+- Session validation for all API endpoints
 
 ## Prerequisites
 
@@ -93,39 +105,29 @@ Never commit your `.env.local` file or any API keys to version control. The `.en
 - A Google Cloud project with OAuth credentials
 - API keys for OpenAI, Anthropic, and Google AI
 
-## How it works
+## Development Workflow
 
-1. Users can interact with the chat interface after logging in
-2. Chat history is automatically saved to Supabase
-3. The login process uses Google authentication via Supabase
-4. Once logged in, users can:
-   - See their Google profile picture in the header
-   - Access their profile information
-   - View their chat history
-   - Select different AI models
-   - Sign out when needed
-5. The chat interface features:
-   - Real-time message updates
-   - Loading indicators
-   - User messages in blue (right side)
-   - AI responses in gray (left side)
-   - Model selection dropdown
-   - Persistent chat history
+1. Set up environment variables in `.env.local`
+2. Install dependencies with `npm install`
+3. Run the development server with `npm run dev`
+4. Access the application at http://localhost:3000
 
 ## Technologies Used
 
 - Next.js 14
 - React 18
 - TypeScript
-- Supabase Auth & Database
+- Supabase Auth
 - LangChain
 - Tailwind CSS
 - Google OAuth 2.0
 
 ## Coming Soon
 
+- Conversation memory
+- Persistent message storage
 - Message threading
 - File attachments
 - Mobile app version
-- Enhanced memory management
-- Multi-user conversations 
+- Multi-user conversations
+- Support for Google's Gemini model 

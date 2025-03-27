@@ -1,8 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai'
-import { ConversationChain } from 'langchain/chains'
-import { getMemoryManager } from './memoryStore'
 
 // Check for required environment variables
 if (!process.env.OPENAI_API_KEY) {
@@ -38,12 +36,9 @@ const createModel = (modelType: ModelType) => {
   }
 }
 
-export const createChain = (modelType: ModelType, sessionId: string) => {
+// Simple function to generate a response without memory
+export const generateResponse = async (modelType: ModelType, message: string) => {
   const model = createModel(modelType)
-  const memoryManager = getMemoryManager(sessionId)
-
-  return new ConversationChain({
-    llm: model,
-    memory: memoryManager.getMemory(),
-  })
+  const response = await model.invoke(message)
+  return response.content
 } 

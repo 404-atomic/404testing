@@ -34,7 +34,6 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<ModelType>('gpt-3.5-turbo')
   const [showModelSelect, setShowModelSelect] = useState(false)
   const [session, setSession] = useState<any>(null)
-  const [testResult, setTestResult] = useState<any>(null)
 
   useEffect(() => {
     // Check for existing session
@@ -47,9 +46,6 @@ export default function Home() {
           avatar_url: currentSession.user.user_metadata.avatar_url,
           full_name: currentSession.user.user_metadata.full_name
         })
-        
-        // Load chat history when user logs in
-        loadChatHistory(currentSession.access_token)
       }
     }
     
@@ -73,26 +69,6 @@ export default function Home() {
       subscription.unsubscribe()
     }
   }, [])
-
-  const loadChatHistory = async (token: string) => {
-    try {
-      const response = await fetch('/api/chat/history', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to load chat history')
-      }
-
-      const data = await response.json()
-      setMessages(data.messages)
-    } catch (error) {
-      console.error('Error loading chat history:', error)
-      setError('Failed to load chat history')
-    }
-  }
 
   const handleLogin = async () => {
     try {
@@ -170,29 +146,6 @@ export default function Home() {
     }
   }
 
-  const handleTestMemory = async () => {
-    if (!session) return;
-    
-    try {
-      const response = await fetch('/api/chat/test', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to test memory');
-      }
-
-      const data = await response.json();
-      setTestResult(data);
-      console.log('Memory test result:', data);
-    } catch (error) {
-      console.error('Error testing memory:', error);
-      setError('Failed to test memory');
-    }
-  };
-
   return (
     <div className="flex flex-col h-screen bg-[#1B1B1B] text-white">
       {/* Header */}
@@ -200,45 +153,37 @@ export default function Home() {
         <div className="flex items-center space-x-4">
           <h1 className="text-xl font-semibold">AI Chat</h1>
           {user && (
-            <>
-              <div className="relative">
-                <button
-                  onClick={() => setShowModelSelect(!showModelSelect)}
-                  className="px-3 py-1 text-sm bg-gray-800 rounded-md hover:bg-gray-700 flex items-center space-x-2"
-                >
-                  <span>{models.find(m => m.id === selectedModel)?.name}</span>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {showModelSelect && (
-                  <div className="absolute left-0 mt-2 w-64 bg-[#2D2D2D] rounded-md shadow-lg py-1 z-10">
-                    {models.map((model) => (
-                      <button
-                        key={model.id}
-                        onClick={() => {
-                          setSelectedModel(model.id)
-                          setShowModelSelect(false)
-                        }}
-                        className={`w-full px-4 py-2 text-left hover:bg-gray-700 flex flex-col ${
-                          selectedModel === model.id ? 'bg-gray-700' : ''
-                        }`}
-                      >
-                        <span className="font-medium">{model.name}</span>
-                        <span className="text-sm text-gray-400">{model.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="relative">
               <button
-                onClick={handleTestMemory}
-                className="px-3 py-1 text-sm bg-gray-800 rounded-md hover:bg-gray-700"
+                onClick={() => setShowModelSelect(!showModelSelect)}
+                className="px-3 py-1 text-sm bg-gray-800 rounded-md hover:bg-gray-700 flex items-center space-x-2"
               >
-                Test Memory
+                <span>{models.find(m => m.id === selectedModel)?.name}</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
-            </>
+
+              {showModelSelect && (
+                <div className="absolute left-0 mt-2 w-64 bg-[#2D2D2D] rounded-md shadow-lg py-1 z-10">
+                  {models.map((model) => (
+                    <button
+                      key={model.id}
+                      onClick={() => {
+                        setSelectedModel(model.id)
+                        setShowModelSelect(false)
+                      }}
+                      className={`w-full px-4 py-2 text-left hover:bg-gray-700 flex flex-col ${
+                        selectedModel === model.id ? 'bg-gray-700' : ''
+                      }`}
+                    >
+                      <span className="font-medium">{model.name}</span>
+                      <span className="text-sm text-gray-400">{model.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
         
@@ -305,14 +250,6 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {testResult && (
-              <div className="mb-4 p-4 bg-gray-800 rounded-lg overflow-auto max-h-60">
-                <h3 className="font-bold mb-2">Memory Test Results:</h3>
-                <pre className="text-sm text-gray-300 whitespace-pre-wrap">
-                  {JSON.stringify(testResult, null, 2)}
-                </pre>
-              </div>
-            )}
             {messages.map((message, index) => (
               <div
                 key={index}
